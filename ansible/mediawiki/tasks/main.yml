@@ -1,0 +1,88 @@
+---
+# tasks file for nginx_custom
+
+- name: Установка необходимых  пакетов 
+  apt:
+    name:
+      - nginx
+      - php
+      - php-intl
+      - php-mbstring
+      - php-xml
+      - php-apcu
+      - php-curl
+      - curl
+      - wget
+      - php-fpm
+      - php-pgsql
+    state: present
+  when: ansible_hostname != "nginx0"
+
+- name: Загрузка и установка mediawiki   
+  ansible.builtin.unarchive:
+    src: https://releases.wikimedia.org/mediawiki/1.42/mediawiki-1.42.3.tar.gz
+    dest: /tmp
+    remote_src: yes
+  when: ansible_hostname != "nginx0"
+
+- name: Удаление содержимого папки /var/lib/mediawiki
+  shell: rm -rf /var/lib/mediawiki/*
+  when: ansible_hostname != "nginx0"
+
+- name: Перемещение mediawiki
+  shell: mv -f /tmp/mediawiki*/* /var/lib/mediawiki
+  when: ansible_hostname != "nginx0"
+
+- name: Создание символной ссылки
+  ansible.builtin.file:
+    src: /var/lib/mediawiki
+    dest: /var/www/mediawiki
+    state: link
+  when: ansible_hostname != "nginx0"
+
+- name: Подмена веб-страницы
+  ansible.builtin.template:
+    src: mediawiki.conf.j2
+    dest: /etc/nginx/sites-available/mediawiki.conf
+  notify: "Nginx Reloader"
+  when: ansible_hostname != "nginx0"
+
+- name: Подмена веб-страницы
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/mediawiki.conf
+    dest: /etc/nginx/sites-enabled/mediawiki
+    state: link
+  when: ansible_hostname != "nginx0"
+    
+- name: Удаление файла /etc/nginx/sites-enabled/default
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  when: ansible_hostname != "nginx0"
+
+- name: Остановка apache
+  ansible.builtin.systemd_service:
+    name: apache2
+    state: stopped
+    enabled: false
+  when: ansible_hostname != "nginx0"
+
+- name: Копирование LocalSettings.php на nginx1 и установка прав на файл
+  ansible.builtin.template:
+    src: LocalSettings.nginx1.php.j2
+    dest: /var/lib/mediawiki/LocalSettings.php
+    mode: 0600
+    owner: www-data
+    group: www-data
+  notify: "Nginx Reloader"
+  when: ansible_hostname == "nginx1"
+
+- name: Копирование LocalSettings.php на nginx2 и установка прав на файл
+  ansible.builtin.template:
+    src: LocalSettings.nginx2.php.j2
+    dest: /var/lib/mediawiki/LocalSettings.php
+    mode: 0600
+    owner: www-data
+    group: www-data
+  notify: "Nginx Reloader"
+  when: ansible_hostname == "nginx2"

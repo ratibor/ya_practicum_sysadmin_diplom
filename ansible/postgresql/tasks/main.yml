@@ -1,0 +1,81 @@
+---
+# tasks file for postgresql
+
+- name: Установка Postgresql
+  apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+    state: present
+
+- name: Редактирование /etc/postgresql/16/main/pg_hba.conf
+  template:
+    src: pg_hba.conf.j2
+    dest: /etc/postgresql/16/main/pg_hba.conf
+
+- name: Редактирование /etc/postgresql/16/main/postgresql.conf на Master
+  template:
+    src: postgresql.conf.master.j2
+    dest: /etc/postgresql/16/main/postgresql.conf
+  when: "'db1' in inventory_hostname"
+
+- name: Редактирование /etc/postgresql/16/main/postgresql.conf на Slave
+  template:
+    src: postgresql.conf.slave.j2
+    dest: /etc/postgresql/16/main/postgresql.conf
+  when: ansible_hostname != "db1"
+
+- name: Перезапуск postgresql
+  systemd_service:
+    name: postgresql
+    state: restarted
+
+- name: Создание роли для репликации
+  shell: sudo psql -U postgres -c "CREATE ROLE repuser REPLICATION LOGIN PASSWORD '1q2w3e4r5t'"
+  ignore_errors: true
+
+- name: Создание пользователя wikiuser
+  shell: sudo psql -U postgres -c "CREATE ROLE wikiuser LOGIN PASSWORD '1q2w3e4r5t'"
+  when: "'db1' in inventory_hostname"
+  ignore_errors: true
+
+- name: Создание базы my_wiki
+  shell: psql -U postgres -c "CREATE DATABASE my_wiki OWNER  wikiuser"
+  when: "'db1' in inventory_hostname"
+  ignore_errors: true
+
+- name: Копирование дефолтной базы mediawiki на db1
+  copy:
+    src: files/my_wiki.dump
+    dest: /tmp
+  when: "'db1' in inventory_hostname"
+
+- name: Установка дефолтной базы mediawiki
+  shell: psql -U postgres -d my_wiki < /tmp/my_wiki.dump
+  when: "'db1' in inventory_hostname"
+
+- name: Перезапуск postgresql
+  systemd_service:
+    name: postgresql
+    state: restarted
+  when: "'db1' in inventory_hostname"
+
+- name: Остановка postgresql
+  systemd_service:
+    name: postgresql
+    state: stopped
+  when: ansible_hostname != "db1"
+
+- name: Удаление /var/lib/postgresql/16/main/  на Slave
+  shell: sudo -u postgres rm -rf /var/lib/postgresql/16/main/
+  when: ansible_hostname != "db1"
+
+- name: Репликация на Slave
+  shell: sudo -u postgres pg_basebackup -h 10.78.10.9 -D /var/lib/postgresql/16/main -U repuser -P -v -R
+  when: ansible_hostname != "db1"
+
+- name: Запуск postgresql
+  systemd_service:
+    name: postgresql
+    state: started
+  when: ansible_hostname != "db1"

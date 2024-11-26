@@ -1,0 +1,35 @@
+--- 
+- name: Смена имени ВМ
+  hosts: all
+  roles:
+    - role: hostname
+  tags:
+    - hostname
+
+- name: Настройка кластера Postgresql
+  hosts: postgresql
+  roles:
+    - role: postgresql
+  tags:
+    - postgresql
+
+- name: Настройка проксирующего Nginx
+  hosts: nginx
+  roles:
+    - role: nginx_proxy
+  tags:
+    - proxy 
+
+- name: Установка и настройка mediawiki
+  hosts: nginx
+  roles:
+    - role: mediawiki
+  tags:
+    - mediawiki
+
+- name: Установка и настройка zabbix
+  hosts: zabbix
+  roles:
+    - role: zabbix
+  tags:
+    - zabbix

@@ -1,0 +1,79 @@
+---
+# tasks file for zabbix
+
+- name: Копирование пакета zabbix-release_latest+ubuntu22.04_all.deb
+  copy:
+    src: files/zabbix-release_latest+ubuntu22.04_all.deb
+    dest: /tmp
+
+- name: Установка пакета zabbix-release_latest+ubuntu22.04_all.deb
+  apt:
+    deb: /tmp/zabbix-release_latest+ubuntu22.04_all.deb
+
+- name: apt update
+  apt:
+    update_cache: yes
+
+- name: Установка необходимых пакетов
+  apt:
+    name:
+      - zabbix-server-pgsql
+      - zabbix-frontend-php
+      - php8.1-pgsql
+      - zabbix-nginx-conf
+      - zabbix-sql-scripts
+      - zabbix-agent
+      - postgresql
+      - postgresql-contrib
+      - ansible
+
+- name: Редактирование /etc/postgresql/14/main/pg_hba.conf
+  template:
+    src: pg_hba.conf.j2
+    dest: /etc/postgresql/14/main/pg_hba.conf
+
+- name: Перезапуск postgresql
+  systemd_service:
+    name: postgresql
+    state: restarted
+
+- name: Создание роли для zabbix
+  shell: sudo psql -U postgres -c "CREATE ROLE zabbix REPLICATION LOGIN PASSWORD '1q2w3e4r5t'"
+  ignore_errors: true
+
+- name: Создание базы zabbix
+  shell: psql -U postgres -c "CREATE DATABASE zabbix OWNER  zabbix"
+  ignore_errors: true
+
+- name: Копирование преднастроенной базы zabbix
+  copy:
+    src: "{{ role_path }}/files/zabbix.dump"
+    dest: /tmp
+  ignore_errors: true
+
+- name: Установка преднастроенной  базы zabbix
+  shell: psql -U postgres -d zabbix < /tmp/zabbix.dump
+  ignore_errors: true
+
+- name: Копирование конфигурационных файлов zabbix
+  copy:
+    src: "{{ role_path }}/files/zabbix"
+    dest: /tmp
+
+- name: Удаление содержимого /etc/zabbix
+  shell: rm -rf /etc/zabbix/*
+
+- name: Перемещение конфигурационных файлов в /etc/zabbix
+  shell: mv -f /tmp/zabbix/* /etc/zabbix
+
+- name: Перезапуск сервисов zabbix-server zabbix-agent nginx php8.1-fpm postgresql
+  systemd_service:
+    name: '{{ item }}.service' 
+    state: restarted
+    enabled: true
+  with_items:  
+    - zabbix-server
+    - zabbix-agent
+    - nginx
+    - php8.1-fpm
+    - postgresql

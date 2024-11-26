@@ -1,0 +1,14 @@
+upstream 89.169.151.240 {
+    least_conn;
+    server 89.169.149.238;
+    server 89.169.148.140;
+}
+
+server {
+    listen 80;
+       
+
+    location / {
+       proxy_pass http://89.169.151.240;
+    }
+}

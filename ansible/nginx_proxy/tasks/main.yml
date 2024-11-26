@@ -1,0 +1,15 @@
+---
+# tasks file for nginx_custom
+
+- name: Установка Nginx 
+  apt:
+    name: "nginx"
+    state: present
+  when: ansible_hostname  == "nginx0"
+
+- name: Настройка проксирующего nginx
+  ansible.builtin.template:
+    src: index.j2
+    dest: /etc/nginx/sites-available/default
+  when: ansible_hostname  == "nginx0"
+  notify: "Nginx Reloader"
